@@ -1,4 +1,4 @@
-// Part 2 skeleton
+
 
 module part2
 	(
