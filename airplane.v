@@ -70,17 +70,7 @@ module game
     
     // Instansiate datapath
 	// datapath d0(...);
-	module combined(
-		.go(go),
-	 	.clk(CLOCK_50),
-		.reset_N(resetn),	
-		.colour(SW[9:7]),
-		.x_out(x),
-		.y_out(y),
-		.colour_out(colour),
-		.plot(writeEn)
-	
-	);
+
 
 
     // Instansiate FSM control
@@ -90,7 +80,7 @@ endmodule
 
 module control(
 	input go, clk, reset_N,hold,done_plane, collide,
-	output reg reset_C, en_XY_plane, en_de, erase, plot, ck_cld
+	output reg reset_C, en_XY_plane, en_de, erase, plot, ck_cld,
 	output reg [1:0] draw_op
 	);
 	
@@ -101,14 +91,14 @@ module control(
 			   DRAW_PLANE = 4'd2,
 			   DELAY = 4'd3,
 			   ERASE_PLANE = 4'd4,
-			   UPDATE_XY_PLANE= 4'd5;
+			   UPDATE_XY_PLANE = 4'd5,
 			   CHECK_COLLISION = 4'd6;			
 	//State table
 	always @(*)
 	begin
 		case (current_state)
 			START: next_state = go? START_WAIT: START; 
-			START_WAIT: next_state = go? START_WAIT: DRAW;
+			START_WAIT: next_state = go? START_WAIT: DRAW_PLANE;
 			DRAW_PLANE: next_state = done_plane? DELAY : DRAW_PLANE; 
 			DELAY: next_state = hold? ERASE_PLANE: DELAY;
 			ERASE_PLANE: next_state = done_plane? CHECK_COLLISION: ERASE_PLANE;
@@ -268,6 +258,7 @@ module datapath(
 		2'b01: begin // draw the pipe
 			mux_x = 0; // placeholder
 			mux_y = 0; // placeholder
+			end
 		endcase
 	end
 	assign x_out = mux_x;
@@ -276,7 +267,8 @@ module datapath(
 
 endmodule
 
-module combined(
+
+/*module combined(
 	input go, clk, reset_N,	
 	input [2:0] colour,
 	output [7:0] x_out,
@@ -318,4 +310,4 @@ module combined(
 	);
 	
 	assign plot = p;
-endmodule
+endmodule*/
