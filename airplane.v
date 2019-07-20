@@ -1,6 +1,4 @@
-
-
-module part2
+module game
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		// Your inputs and outputs here
@@ -91,43 +89,51 @@ module part2
 endmodule
 
 module control(
-	input go, clk, reset_N,hold,done,
-	output reg reset_C, en_XY, en_de, erase, plot
+	input go, clk, reset_N,hold,done_plane, collide,
+	output reg reset_C, en_XY_plane, en_de, erase, plot, ck_cld
+	output reg [1:0] draw_op
 	);
 	
-	reg [2:0] current_state, next_state;
+	reg [3:0] current_state, next_state;
 
-	localparam START = 3'd0,
-			   START_WAIT = 3'd1,
-			   DRAW = 3'd2,
-			   DELAY = 3'd3,
-			   ERASE = 3'd4,
-			   UPDATE_XY= 3'd5;
-
+	localparam START = 4'd0,
+			   START_WAIT = 4'd1,
+			   DRAW_PLANE = 4'd2,
+			   DELAY = 4'd3,
+			   ERASE_PLANE = 4'd4,
+			   UPDATE_XY_PLANE= 4'd5;
+			   CHECK_COLLISION = 4'd6;			
+	//State table
 	always @(*)
 	begin
 		case (current_state)
 			START: next_state = go? START_WAIT: START; 
 			START_WAIT: next_state = go? START_WAIT: DRAW;
-			DRAW: next_state = done? DELAY : DRAW; 
-			DELAY: next_state = hold? ERASE: DELAY;
-			ERASE: next_state = done? UPDATE_XY: ERASE;
-			UPDATE_XY: next_state = DRAW;
+			DRAW_PLANE: next_state = done_plane? DELAY : DRAW_PLANE; 
+			DELAY: next_state = hold? ERASE_PLANE: DELAY;
+			ERASE_PLANE: next_state = done_plane? CHECK_COLLISION: ERASE_PLANE;
+			CHECK_COLLISION: next_state = collide? START: UPDATE_XY_PLANE;
+			UPDATE_XY_PLANE: next_state = DRAW_PLANE;
+			
 		endcase	
 	end
 	
+	//Signals
 	always @(*)
-	begin
+	begin: enable_signals
 		reset_C = 0;
-		en_XY = 0;
+		en_XY_plane = 0;
 		en_de = 0;
 		erase = 0;
 		plot = 0;
+		ck_cld = 0;
+		draw_op = 2'b00;
 		case (current_state)
-			DRAW: plot = 1;
+			DRAW_PLANE: begin plot = 1; end
 			DELAY: begin reset_C = 1; en_de = 1; end
-			ERASE: begin erase = 1; plot = 1; end
-			UPDATE_XY: en_XY = 1;	
+			ERASE_PLANE: begin erase = 1; plot = 1; end
+			CHECK_COLLISION: begin ck_cld = 1; end
+			UPDATE_XY_PLANE: en_XY_plane = 1;	
 		endcase	
 	end	
 
@@ -142,61 +148,58 @@ module control(
 endmodule
 
 module datapath(
-	input reset_C, reset_N, clk, enable_delay, enable_XY, erase, plot,
-	input [2:0] colour,
+	input reset_C, reset_N, clk, enable_delay, en_XY_plane, erase, plot, up, ck_cld,
+	input [1:0] draw_op,	
 	
 	output [7:0] x_out,
 	output [6:0] y_out,
 	output [2:0] colour_out,
 
-	output reg  hold, done
+	output reg  hold, done_plane, collide
 	);
-	
-	reg [7:0] x;
-	reg [6:0] y;
+	reg [7:0] mux_x;
+	reg [6:0] mux_y;
+	reg [7:0] plane_x;
+	reg [6:0] plane_y;
 	reg [2:0] colour_reg;
-	reg up;
-	reg right;
-	reg [3:0] count;
+	reg [3:0] count_plane;
 	reg [19:0] delay_count;
 	reg [3:0] frame; 
-	//XY counter logic
+	
+	//plane coordinate logic
 	always @(posedge clk)
 	begin
 		if(!reset_N)
 		begin
-			x <= 0;
-			y <= 7'd60;
-			up <= 1;
-			right <= 1;
+			plane_x <= 7'd80;
+			plane_y <= 7'd60;
+			
 		end
-		else if (enable_XY)
+		else if (en_XY_plane)
 		begin
 			if(up)begin
-				y <= y - 1;
-				if (y == 0)
-					up = ~up;							
+				plane_y <= plane_y - 1;								
 			end
 			else begin
-				y <= y + 1;
-				if (y + 1'd3 == 7'd119)
-					up = ~up;							
-			end
-
-			if(right)begin
-				x <= x + 1;
-				if (x + 1'd3 == 159)
-					right = ~right;							
-			end
-			else begin
-				x <= x - 1;
-				if (x == 0)
-					right = ~right;							
-			end
-			
+				plane_y <= plane_y + 1;				
+			end			
 			
 		end
 	end
+
+	//collision detect logic
+	always @(posedge clk)
+	begin
+		if(!reset_N)
+			collide <= 0;
+		else if (ck_cld) begin // check for collison
+				if (plane_y == 0)
+					collide <= 1;
+				if (plane_y + 2'd3 == 7'd119)
+					collide <= 1;		
+		end
+	end
+		
 
 	//delay&frame counter
 	always @(posedge clk)
@@ -207,52 +210,68 @@ module datapath(
 			hold <= 0;
 		end
 		else if (enable_delay) begin
-			if (delay_count == 6'd8333333) begin
+			if (delay_count == 20'd833333) begin
 				delay_count <= 0;
 				frame <= frame + 1;
 			end
 			else
 				delay_count <= delay_count + 1;
 
-			if (frame == 2'd15) 
+			if (frame == 4'd15) 
 				hold <= 1;		
 			end					
 	end
 	
+	//output colour logic
 	always @(posedge clk)
 	begin
 		if(!reset_N)
 			colour_reg <= 0;
 		else 
 			if (erase)
-				colour_reg <= 0;
-			else
-				colour_reg <= colour;
+				colour_reg <= 0; // Change the colour to match the background
+			else if (draw_op == 2'b00)
+				colour_reg <= 3'b001; //Colour for the plane
+			else if (draw_op == 2'b01)
+				colour_reg <= 3'b010; //colour for the pipe
 			
 	end
 
-	//counter
+	//counter for drawing the plane
 	always @(posedge clk)
 	begin
 		if(!reset_N) begin
-			count <= 0;
-			done <= 0;
+			count_plane <= 0;
+			done_plane <= 0;
 		end
-		else if (!plot) begin
-			count <= 0;
-			done <= 0;		
+		else if (!plot || draw_op != 2'b00) begin
+			count_plane <= 0;
+			done_plane <= 0;		
 		end
-		else if (count == 4'b1111) begin
-					count <= 0;
-					done <= 1;
+		else if (count_plane == 4'b1111) begin
+					count_plane <= 0;
+					done_plane <= 1;
 				end			
 		else
-			count <= count + 1'b1;	
+			count_plane <= count_plane + 1'b1;	
 						
 	end
-
-	assign x_out = x + count[1:0];
-	assign y_out = y + count[3:2];
+	
+	//output xy multiplexier 
+	always @(*)
+	begin
+		case (draw_op)
+		2'b00: begin //draw the plane
+			mux_x = plane_x + count_plane[1:0];
+			mux_y = plane_y + count_plane[3:2];
+			end
+		2'b01: begin // draw the pipe
+			mux_x = 0; // placeholder
+			mux_y = 0; // placeholder
+		endcase
+	end
+	assign x_out = mux_x;
+	assign y_out = mux_y;
 	assign colour_out = colour_reg;
 
 endmodule
