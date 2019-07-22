@@ -1,4 +1,4 @@
-module game
+module airplane
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		// Your inputs and outputs here
@@ -37,6 +37,7 @@ module game
 	wire [2:0] colour;
 	wire [7:0] x;
 	wire [6:0] y;
+	wire writeEn;
 	wire go;
 
 	assign go = ~KEY[3];
@@ -70,6 +71,16 @@ module game
     
     // Instansiate datapath
 	// datapath d0(...);
+	combined c0(
+		.go(go),
+		.clk(CLOCK_50),
+		.reset_N(KEY[0]),
+		.up(KEY[1]),
+		.x_out(x),
+		.y_out(y),
+		.colour_out(colour),
+		.plot(writeEn)		
+	);
 
 
 
@@ -268,9 +279,8 @@ module datapath(
 endmodule
 
 
-/*module combined(
-	input go, clk, reset_N,	
-	input [2:0] colour,
+module combined(
+	input go, clk, reset_N,	up,	
 	output [7:0] x_out,
 	output [6:0] y_out,
 	output [2:0] colour_out,
@@ -278,27 +288,29 @@ endmodule
 	
 );
 
-	wire reset_C, en_XY, en_de, erase, p, hold, done;
-
+	wire reset_C, en_XY_plane, en_de, erase, p, ck_cld, hold, done_plane, collide;
+	wire [1:0] draw_op;
 	control c0(
 		.clk(clk),
 		.go(go),
 		.reset_N(reset_N),
 		.hold(hold),
-		.done(done),
+		.done_plane(done_plane),
+		.collide(collide),
 		.reset_C(reset_C),
-		.en_XY(en_XY),
+		.en_XY_plane(en_XY_plane),
 		.en_de(en_de),
 		.erase(erase),
-		.plot(p)
+		.plot(p),
+		.ck_cld(ck_cld)
 	);
 	
 	datapath d0(
-		.colour(colour),
+		.up(up),		
 		.hold(hold),
-		.done(done),
+		.done_plane(done_plane),
 		.reset_C(reset_C),
-		.enable_XY(en_XY),
+		.en_XY_plane(en_XY_plane),
 		.enable_delay(en_de),
 		.erase(erase),
 		.plot(p),
@@ -306,8 +318,11 @@ endmodule
 		.reset_N(reset_N),		
 		.x_out(x_out),
 		.y_out(y_out),
-		.colour_out(colour_out)			
+		.colour_out(colour_out),
+		.ck_cld(ck_cld),
+		.draw_op(draw_op),
+		.collide(collide)			
 	);
 	
 	assign plot = p;
-endmodule*/
+endmodule
