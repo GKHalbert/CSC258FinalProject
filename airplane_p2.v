@@ -175,7 +175,7 @@ module datapath(
 	
 	reg p1;
 	reg [10:0] num_p1;
-	reg [3:0] count_p1;
+	reg [10:0] count_p1;
 	reg [7:0] mux_x;
 	reg [6:0] mux_y;
 	reg [7:0] plane_x;
@@ -188,6 +188,8 @@ module datapath(
 	reg [19:0] delay_count;
 	reg [3:0] frame;
 	reg [19:0] delay_limit;
+	
+	wire [6:0] random;
 	
 	//plane coordinate logic
 	always @(posedge clk)
@@ -210,6 +212,12 @@ module datapath(
 		end
 	end
 	
+	lfsr l0(
+		.clk(clk),
+		.reset(reset_N),
+		.out(random)
+		);
+	
 	// pipe1 coordinate logic
 	always @(posedge clk)
 	begin
@@ -224,8 +232,8 @@ module datapath(
 				if (!p1)
 					begin
 					p1 <= 1;
-					p1_y <= 7'd50;
-					num_p1 <= p1_y * 10'd10;
+					p1_y <= random % 7'd100;
+					num_p1 <= (11'd119-p1_y) * 11'd8;
 				end
 				else if (p1_x == 0) begin
 					p1_x <= 7'd160;
@@ -348,8 +356,8 @@ module datapath(
 			mux_y = plane_y + count_plane[3:2];
 			end
 		3'b001: begin // draw the pipe 1
-			mux_x = p1_x + count_p1[3:0]; // placeholder
-			mux_y = p1_y + count_p1 [3:2]; // placeholder
+			mux_x = p1_x + count_p1[2:0]; // placeholder
+			mux_y = p1_y + count_p1 [10:3]; // placeholder
 			end
 		endcase
 	end
@@ -413,6 +421,26 @@ module combined(
 	);
 	
 	assign plot = p;
+endmodule
+
+// a random number generator
+module lfsr(	
+	input clk,
+	input reset,
+	output reg [6:0] out);
+	
+	wire feedback;
+	
+	assign feedback = ~(out[6]^out[2]);
+	
+	always @(posedge clk)
+	begin
+		if (!reset)
+			out <= 0;
+		else begin
+			out <= {out[5], out[4], out[4], out[3], out[2], out[1], out[0], feedback};
+		end
+	end
 endmodule
 
 
