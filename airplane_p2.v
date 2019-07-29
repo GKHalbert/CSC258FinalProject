@@ -1,4 +1,4 @@
-module airplane
+module airplane_p2
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		// Your inputs and outputs here
@@ -92,8 +92,8 @@ module airplane
 endmodule
 
 module control(
-	input go, clk, reset_N,hold,done_plane, collide, done_p1,
-	output reg reset_C, en_XY_plane, en_XY_p1, en_de, erase, plot, ck_cld,
+	input go, clk, reset_N,hold,done_plane, collide, done_p1,done_p2, done_p3,
+	output reg reset_C, en_XY_plane, en_XY_p1,en_XY_p2, en_XY_p3, en_de, erase, plot, ck_cld,
 	output reg [2:0] draw_op
 	);
 	
@@ -102,13 +102,19 @@ module control(
 	localparam START = 4'd0,
 			   START_WAIT = 4'd1,
 			   DRAW_PLANE = 4'd2,
-				DRAW_P1 = 4'd3,
-			   DELAY = 4'd4,
-			   ERASE_PLANE = 4'd5,
-				ERASE_P1 = 4'd6,
-				CHECK_COLLISION = 4'd7,	
-			   UPDATE_XY_PLANE = 4'd8,
-				UPDATE_XY_P1 = 4'd9;
+			   DRAW_P1 = 4'd3,
+			   DRAW_P2 = 4'd4,
+			   DRAW_P3 = 4'd5,
+			   DELAY = 4'd6,
+			   ERASE_PLANE = 4'd7,
+			   ERASE_P1 = 4'd8,
+			   ERASE_P2 = 4'd9,
+			   ERASE_P3 = 4'd10,
+			   CHECK_COLLISION = 4'd11,	
+			   UPDATE_XY_PLANE = 4'd12,
+			   UPDATE_XY_P1 = 4'd13,
+			   UPDATE_XY_P2 = 4'd14,
+			   UPDATE_XY_P3 = 4'd15;
 			   		
 	//State table
 	always @(*)
@@ -117,13 +123,19 @@ module control(
 			START: next_state = go? START_WAIT: START; 
 			START_WAIT: next_state = go? START_WAIT: DRAW_PLANE;
 			DRAW_PLANE: next_state = done_plane? DRAW_P1 : DRAW_PLANE;
-			DRAW_P1: next_state = done_p1? DELAY : DRAW_P1;
+			DRAW_P1: next_state = done_p1? DRAW_P2 : DRAW_P1;
+			DRAW_P2: next_state = done_p2? DRAW_P3 : DRAW_P2;
+			DRAW_P3: next_state = done_p3? DELAY : DRAW_P3;
 			DELAY: next_state = hold? ERASE_PLANE: DELAY;
 			ERASE_PLANE: next_state = done_plane? ERASE_P1: ERASE_PLANE;
-			ERASE_P1: next_state = done_p1? CHECK_COLLISION: ERASE_P1;
+			ERASE_P1: next_state = done_p1? ERASE_P2: ERASE_P1;
+			ERASE_P2: next_state = done_p2? ERASE_P3: ERASE_P2;
+			ERASE_P3: next_state = done_p3? CHECK_COLLISION: ERASE_P3;
 			CHECK_COLLISION: next_state = collide? START: UPDATE_XY_PLANE;
 			UPDATE_XY_PLANE: next_state = UPDATE_XY_P1;
-			UPDATE_XY_P1: next_state = DRAW_PLANE;
+			UPDATE_XY_P1: next_state = UPDATE_XY_P2;
+			UPDATE_XY_P2: next_state = UPDATE_XY_P3;
+			UPDATE_XY_P3: next_state = DRAW_PLANE;			
 			
 		endcase	
 	end
@@ -134,6 +146,8 @@ module control(
 		reset_C = 0;
 		en_XY_plane = 0;
 		en_XY_p1= 0;
+		en_XY_p2= 0;
+		en_XY_p3= 0;
 		en_de = 0;
 		erase = 0;
 		plot = 0;
@@ -142,12 +156,18 @@ module control(
 		case (current_state)
 			DRAW_PLANE: begin plot = 1; end
 			DRAW_P1: begin plot = 1; draw_op = 3'b001; end
+			DRAW_P2: begin plot = 1; draw_op = 3'b010; end
+			DRAW_P3: begin plot = 1; draw_op = 3'b011; end
 			DELAY: begin reset_C = 1; en_de = 1; end
-		   ERASE_P1: begin erase = 1; plot = 1; draw_op = 3'b001; end
+		    ERASE_P1: begin erase = 1; plot = 1; draw_op = 3'b001; end
+			ERASE_P2: begin erase = 1; plot = 1; draw_op = 3'b010; end
+			ERASE_P2: begin erase = 1; plot = 1; draw_op = 3'b011; end
 			ERASE_PLANE: begin erase = 1; plot = 1; end
 			CHECK_COLLISION: begin ck_cld = 1; end
 			UPDATE_XY_PLANE: en_XY_plane = 1;	
 			UPDATE_XY_P1: en_XY_p1 = 1;
+			UPDATE_XY_P2: en_XY_p2 = 1;
+			UPDATE_XY_P3: en_XY_p3 = 1;
 		endcase	
 	end	
 
@@ -162,27 +182,27 @@ module control(
 endmodule
 
 module datapath(
-	input reset_C, reset_N, clk, enable_delay, en_XY_plane, erase, plot, up, ck_cld, en_XY_p1,
-	input [2:0] draw_op,	delay,
+	input reset_C, reset_N, clk, enable_delay, en_XY_plane, erase, plot, up, ck_cld, en_XY_p1,en_XY_p2, en_XY_p3,
+	input [2:0] draw_op,delay,
 	
 	
 	output [7:0] x_out,
 	output [6:0] y_out,
 	output [2:0] colour_out,
 
-	output reg  hold, done_plane, done_p1, collide
+	output reg  hold, done_plane, done_p1, done_p2, done_p3, collide
 	);
 	
-	reg p1;
-	reg [10:0] num_p1;
-	reg [10:0] count_p1;
+	reg p1, p2, p3;
+	reg [10:0] num_p1, num_p2, num_p3;
+	reg [10:0] count_p1, count_p2, count_p3;
 	reg [7:0] mux_x;
 	reg [6:0] mux_y;
 	reg [7:0] plane_x;
 	reg [6:0] plane_y;
 	reg [31:0] temp;
-	reg [7:0] p1_x;
-	reg [6:0] p1_y;
+	reg [7:0] p1_x, p2_x, p3_x;
+	reg [6:0] p1_y, p2_y, p3_y;
 	reg [2:0] colour_reg;
 	reg [3:0] count_plane;
 	reg [19:0] delay_count;
@@ -251,6 +271,72 @@ module datapath(
 		end		
 	end
 
+	// pipe2 coordinate logic
+	always @(posedge clk)
+	begin
+		if(!reset_N)
+		begin
+			p2_x <= 8'd240;
+			p2_y <= 0;
+			p2 <= 0;
+			num_p2 <= 0;
+		end
+		else if (en_XY_p2) begin
+				if (!p2)
+					begin
+					p2 <= 1;
+					if (random > 7'd119) begin
+						p2_y <= random - 7'd119;
+						num_p2 <= (11'd119-(random - 7'd119)) * 11'd8;
+					end
+					else begin
+						p2_y <= random;
+						num_p2 <= (11'd119-random) * 11'd8;
+					end
+				end
+				else if (p2_x == 0) begin
+					p2_x <= 8'd240;
+					p2 <= 0;
+				end	
+				else 
+					p2_x <= p2_x - 1;
+				
+		end		
+	end
+
+	// pipe3 coordinate logic
+	always @(posedge clk)
+	begin
+		if(!reset_N)
+		begin
+			p3_x <= 8'd320;
+			p3_y <= 0;
+			p3 <= 0;
+			num_p3 <= 0;
+		end
+		else if (en_XY_p3) begin
+				if (!p3)
+					begin
+					p3 <= 1;
+					if (random > 7'd119) begin
+						p3_y <= random - 7'd119;
+						num_p3 <= (11'd119-(random - 7'd119)) * 11'd8;
+					end
+					else begin
+						p3_y <= random;
+						num_p3 <= (11'd119-random) * 11'd8;
+					end
+				end
+				else if (p3_x == 0) begin
+					p3_x <= 8'd320;
+					p3 <= 0;
+				end	
+				else 
+					p3_x <= p3_x - 1;
+				
+		end		
+	end
+
 	//collision detect logic
 	always @(posedge clk)
 	begin
@@ -272,6 +358,26 @@ module datapath(
 					if (plane_x <= p1_x + 4'd7 && plane_x >= p1_x -2'd3)
 						collide <= 1;				
 				end
+				//collide with pipe 2
+				if (plane_y + 2'd3 > p2_y) begin // collide front
+					if (plane_x + 2'd3 == p2_x)
+						collide <= 1;				
+				end
+				
+				if (plane_y + 2'd3 == p2_y) begin // collide upper
+					if (plane_x <= p2_x + 4'd7 && plane_x >= p2_x -2'd3)
+						collide <= 1;				
+				end
+				//collide with pipe 3
+				if (plane_y + 2'd3 > p3_y) begin // collide front
+					if (plane_x + 2'd3 == p3_x)
+						collide <= 1;				
+				end
+				
+				if (plane_y + 2'd3 == p3_y) begin // collide upper
+					if (plane_x <= p3_x + 4'd7 && plane_x >= p3_x -2'd3)
+						collide <= 1;				
+				end		
 			
 						
 		end
@@ -322,6 +428,10 @@ module datapath(
 				colour_reg <= 3'b001; //Colour for the plane
 			else if (draw_op == 3'b001)
 				colour_reg <= 3'b010; //colour for the pipe
+			else if (draw_op == 3'b010)
+				colour_reg <= 3'b010; //colour for the pipe
+			else if (draw_op == 3'b011)
+				colour_reg <= 3'b010; //colour for the pipe
 			
 	end
 
@@ -366,6 +476,46 @@ module datapath(
 						
 	end
 	
+	//counter for drawing the pipe 2
+	always @(posedge clk)
+	begin
+		if(!reset_N) begin
+			count_p2 <= 0;
+			done_p2 <= 0;
+		end
+		else if (!plot || draw_op != 3'b010) begin
+			count_p2 <= 0;
+			done_p2 <= 0;		
+		end
+		else if (count_p2 == num_p2) begin
+					count_p2 <= 0;
+					done_p2 <= 1;
+				end			
+		else
+			count_p2 <= count_p2 + 1'b1;	
+						
+	end
+
+	//counter for drawing the pipe 3
+	always @(posedge clk)
+	begin
+		if(!reset_N) begin
+			count_p3 <= 0;
+			done_p3<= 0;
+		end
+		else if (!plot || draw_op != 3'b011) begin
+			count_p3 <= 0;
+			done_p3 <= 0;		
+		end
+		else if (count_p3 == num_p3) begin
+					count_p3 <= 0;
+					done_p3<= 1;
+				end			
+		else
+			count_p3 <= count_p3 + 1'b1;	
+						
+	end
+	
 	//output xy multiplexier 
 	always @(*)
 	begin
@@ -375,8 +525,16 @@ module datapath(
 			mux_y = plane_y + count_plane[3:2];
 			end
 		3'b001: begin // draw the pipe 1
-			mux_x = p1_x + count_p1[2:0]; // placeholder
-			mux_y = p1_y + count_p1 [10:3]; // placeholder
+			mux_x = p1_x + count_p1[2:0]; 
+			mux_y = p1_y + count_p1 [10:3];
+			end
+		3'b010: begin // draw the pipe 2
+			mux_x = p2_x + count_p2[2:0]; 
+			mux_y = p2_y + count_p2 [10:3];
+			end
+		3'b011: begin // draw the pipe 3
+			mux_x = p3_x + count_p3[2:0]; 
+			mux_y = p3_y + count_p3 [10:3];
 			end
 		endcase
 	end
@@ -397,7 +555,7 @@ module combined(
 	
 );
 
-	wire reset_C, en_XY_plane, en_XY_p1, done_p1, en_de, erase, p, ck_cld, hold, done_plane, collide;
+	wire reset_C, en_XY_plane, en_XY_p1,en_XY_p2, en_XY_p3, done_p1, done_p2, done_p3, en_de, erase, p, ck_cld, hold, done_plane, collide;
 	wire [2:0] draw_op;
 	control c0(
 		.clk(clk),
@@ -406,10 +564,14 @@ module combined(
 		.hold(hold),
 		.done_plane(done_plane),
 		.done_p1(done_p1),
+		.done_p2(done_p2),
+		.done_p3(done_p3),
 		.collide(collide),
 		.reset_C(reset_C),
 		.en_XY_plane(en_XY_plane),
 		.en_XY_p1(en_XY_p1),
+		.en_XY_p2(en_XY_p2),
+		.en_XY_p3(en_XY_p3),
 		.en_de(en_de),
 		.erase(erase),
 		.plot(p),
@@ -423,9 +585,13 @@ module combined(
 		.hold(hold),
 		.done_plane(done_plane),
 		.done_p1(done_p1),
+		.done_p2(done_p2),
+		.done_p3(done_p3),
 		.reset_C(reset_C),
 		.en_XY_plane(en_XY_plane),
 		.en_XY_p1(en_XY_p1),
+		.en_XY_p2(en_XY_p2),
+		.en_XY_p3(en_XY_p3),
 		.enable_delay(en_de),
 		.erase(erase),
 		.plot(p),
