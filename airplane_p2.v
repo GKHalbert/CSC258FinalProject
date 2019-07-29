@@ -189,7 +189,7 @@ module datapath(
 	reg [3:0] frame;
 	reg [19:0] delay_limit;
 	
-	wire [6:0] random;
+	wire [7:0] random;
 	
 	//plane coordinate logic
 	always @(posedge clk)
@@ -232,11 +232,17 @@ module datapath(
 				if (!p1)
 					begin
 					p1 <= 1;
-					p1_y <= random % 7'd100;
-					num_p1 <= (11'd119-p1_y) * 11'd8;
+					if (random > 7'd119) begin
+						p1_y <= random - 7'd119;
+						num_p1 <= (11'd119-(random - 7'd119)) * 11'd8;
+					end
+					else begin
+						p1_y <= random;
+						num_p1 <= (11'd119-random) * 11'd8;
+					end
 				end
 				else if (p1_x == 0) begin
-					p1_x <= 7'd160;
+					p1_x <= 8'd160;
 					p1 <= 0;
 				end	
 				else 
@@ -251,10 +257,23 @@ module datapath(
 		if(!reset_N)
 			collide <= 0;
 		else if (ck_cld) begin // check for collison
+				//collide with edge				
 				if (plane_y == 0)
 					collide <= 1;
 				if (plane_y + 2'd3 == 7'd119)
-					collide <= 1;		
+					collide <= 1;
+				//collide with pipe 1
+				if (plane_y + 2'd3 > p1_y) begin // collide front
+					if (plane_x + 2'd3 == p1_x)
+						collide <= 1;				
+				end
+				
+				if (plane_y + 2'd3 == p1_y) begin // collide upper
+					if (plane_x <= p1_x + 4'd7 && plane_x >= p1_x -2'd3)
+						collide <= 1;				
+				end
+			
+						
 		end
 	end
 		
@@ -427,16 +446,16 @@ endmodule
 module lfsr(	
 	input clk,
 	input reset,
-	output reg [6:0] out);
+	output reg [7:0] out);
 	
 	wire feedback;
 	
-	assign feedback = ~(out[6]^out[2]);
+	assign feedback = ~(out[7]^out[3]);
 	
 	always @(posedge clk)
 	begin
 		if (!reset)
-			out <= 0;
+			out <= 7'b00001011;
 		else begin
 			out <= {out[5], out[4], out[4], out[3], out[2], out[1], out[0], feedback};
 		end
