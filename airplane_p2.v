@@ -123,9 +123,9 @@ module control(
 			START: next_state = go? START_WAIT: START; 
 			START_WAIT: next_state = go? START_WAIT: DRAW_PLANE;
 			DRAW_PLANE: next_state = done_plane? DRAW_P1 : DRAW_PLANE;
-			DRAW_P1: next_state = done_p1? DRAW_P2 : DRAW_P1;
+			DRAW_P1: next_state = done_p1? DRAW_P2	: DRAW_P1;
 			DRAW_P2: next_state = done_p2? DRAW_P3 : DRAW_P2;
-			DRAW_P3: next_state = done_p3? DELAY : DRAW_P3;
+			DRAW_P3: next_state = done_p3? DELAY: DRAW_P3;
 			DELAY: next_state = hold? ERASE_PLANE: DELAY;
 			ERASE_PLANE: next_state = done_plane? ERASE_P1: ERASE_PLANE;
 			ERASE_P1: next_state = done_p1? ERASE_P2: ERASE_P1;
@@ -159,9 +159,9 @@ module control(
 			DRAW_P2: begin plot = 1; draw_op = 3'b010; end
 			DRAW_P3: begin plot = 1; draw_op = 3'b011; end
 			DELAY: begin reset_C = 1; en_de = 1; end
-		    ERASE_P1: begin erase = 1; plot = 1; draw_op = 3'b001; end
+		   ERASE_P1: begin erase = 1; plot = 1; draw_op = 3'b001; end
 			ERASE_P2: begin erase = 1; plot = 1; draw_op = 3'b010; end
-			ERASE_P2: begin erase = 1; plot = 1; draw_op = 3'b011; end
+			ERASE_P3: begin erase = 1; plot = 1; draw_op = 3'b011; end
 			ERASE_PLANE: begin erase = 1; plot = 1; end
 			CHECK_COLLISION: begin ck_cld = 1; end
 			UPDATE_XY_PLANE: en_XY_plane = 1;	
@@ -210,6 +210,7 @@ module datapath(
 	reg [19:0] delay_limit;
 	
 	wire [7:0] random;
+	wire [3:0] height;
 	
 	//plane coordinate logic
 	always @(posedge clk)
@@ -232,6 +233,8 @@ module datapath(
 		end
 	end
 	
+
+	
 	lfsr l0(
 		.clk(clk),
 		.reset(reset_N),
@@ -243,7 +246,7 @@ module datapath(
 	begin
 		if(!reset_N)
 		begin
-			p1_x <= 8'd160;
+			p1_x <= 8'd120;
 			p1_y <= 0;
 			p1 <= 0;
 			num_p1 <= 0;
@@ -251,15 +254,23 @@ module datapath(
 		else if (en_XY_p1) begin
 				if (!p1)
 					begin
-					p1 <= 1;
-					if (random > 7'd119) begin
-						p1_y <= random - 7'd119;
-						num_p1 <= (11'd119-(random - 7'd119)) * 11'd8;
+					p1 <= 1;	
+					if (random < 20) begin
+						p1_y <= random + 30;
+						num_p1 <= (11'd119-(random+30))* 11'd8;
 					end
-					else begin
+					else if (7'd20 < random && random < 7'd120) begin
 						p1_y <= random;
 						num_p1 <= (11'd119-random) * 11'd8;
 					end
+					else if (random < 200) begin
+						p1_y <= random - 120;
+						num_p1 <= (11'd119-(random-120))* 11'd8;
+					end
+					else begin
+						p1_y <= random - 180;
+						num_p1 <= (11'd119-(random-180))* 11'd8;
+					end					
 				end
 				else if (p1_x == 0) begin
 					p1_x <= 8'd160;
@@ -276,7 +287,7 @@ module datapath(
 	begin
 		if(!reset_N)
 		begin
-			p2_x <= 8'd240;
+			p2_x <= 8'd180;
 			p2_y <= 0;
 			p2 <= 0;
 			num_p2 <= 0;
@@ -285,17 +296,25 @@ module datapath(
 				if (!p2)
 					begin
 					p2 <= 1;
-					if (random > 7'd119) begin
-						p2_y <= random - 7'd119;
-						num_p2 <= (11'd119-(random - 7'd119)) * 11'd8;
+					if (random < 20) begin
+						p2_y <= random + 30;
+						num_p2 <= (11'd119-(random+30))* 11'd8;
 					end
-					else begin
+					else if (7'd20 < random && random < 7'd120) begin
 						p2_y <= random;
 						num_p2 <= (11'd119-random) * 11'd8;
 					end
+					else if (random < 200) begin
+						p2_y <= random - 120;
+						num_p2 <= (11'd119-(random-120))* 11'd8;
+					end
+					else begin
+						p2_y <= random - 180;
+						num_p2 <= (11'd119-(random-180))* 11'd8;
+					end					
 				end
 				else if (p2_x == 0) begin
-					p2_x <= 8'd240;
+					p2_x <= 8'd160;
 					p2 <= 0;
 				end	
 				else 
@@ -303,13 +322,13 @@ module datapath(
 				
 		end		
 	end
-
+	
 	// pipe3 coordinate logic
 	always @(posedge clk)
 	begin
 		if(!reset_N)
 		begin
-			p3_x <= 8'd320;
+			p3_x <= 8'd240;
 			p3_y <= 0;
 			p3 <= 0;
 			num_p3 <= 0;
@@ -318,17 +337,25 @@ module datapath(
 				if (!p3)
 					begin
 					p3 <= 1;
-					if (random > 7'd119) begin
-						p3_y <= random - 7'd119;
-						num_p3 <= (11'd119-(random - 7'd119)) * 11'd8;
+					if (random < 20) begin
+						p3_y <= random + 30;
+						num_p3 <= (11'd119-(random+30))* 11'd8;
 					end
-					else begin
+					else if (7'd20 < random && random < 7'd120) begin
 						p3_y <= random;
 						num_p3 <= (11'd119-random) * 11'd8;
 					end
+					else if (random < 200) begin
+						p3_y <= random - 120;
+						num_p3 <= (11'd119-(random-120))* 11'd8;
+					end
+					else begin
+						p3_y <= random - 180;
+						num_p3 <= (11'd119-(random-180))* 11'd8;
+					end					
 				end
 				else if (p3_x == 0) begin
-					p3_x <= 8'd320;
+					p3_x <= 8'd160;
 					p3 <= 0;
 				end	
 				else 
@@ -336,7 +363,7 @@ module datapath(
 				
 		end		
 	end
-
+   
 	//collision detect logic
 	always @(posedge clk)
 	begin
@@ -388,10 +415,10 @@ module datapath(
 	always @(*)
 	begin
 		case (delay)
-			00: delay_limit = 20'd200000;
-			01: delay_limit = 20'd150000;
-			10: delay_limit = 20'd100000;
-			11: delay_limit = 20'd50000;
+			3'b000: delay_limit = 20'd200000;
+			3'b001: delay_limit = 20'd150000;
+			3'b010: delay_limit = 20'd100000;
+			3'b011: delay_limit = 20'd500;
 		endcase
 	end
 	
@@ -515,6 +542,7 @@ module datapath(
 			count_p3 <= count_p3 + 1'b1;	
 						
 	end
+	
 	
 	//output xy multiplexier 
 	always @(*)
