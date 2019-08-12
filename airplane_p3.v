@@ -1,9 +1,11 @@
-module airplane_p2
+module airplane_p3
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		// Your inputs and outputs here
         KEY,
         SW,
+		  HEX0,
+		  HEX1,
 		// The ports below are for the VGA output.  Do not change.
 		VGA_CLK,   						//	VGA Clock
 		VGA_HS,							//	VGA H_SYNC
@@ -18,6 +20,7 @@ module airplane_p2
 	input			CLOCK_50;				//	50 MHz
 	input   [9:0]   SW;
 	input   [3:0]   KEY;
+	output	[6:0] HEX0, HEX1;
 
 	// Declare your inputs and outputs here
 	// Do not change the following outputs
@@ -35,7 +38,7 @@ module airplane_p2
 	
 	// Create the colour, x, y and writeEn wires that are inputs to the controller.
 	wire [2:0] colour;
-	wire [7:0] x;
+	wire [7:0] x, score;
 	wire [6:0] y;
 	wire writeEn;
 	wire go;
@@ -81,8 +84,19 @@ module airplane_p2
 		.x_out(x),
 		.y_out(y),
 		.colour_out(colour),
-		.plot(writeEn)		
+		.plot(writeEn),
+		.score(score)
 	);
+	
+	hxdisplay d0(
+		.hex_digit(score[3:0]),
+		.segments(HEX0[6:0])
+		);
+		
+	hxdisplay d1(
+		.hex_digit(score[7:4]),
+		.segments(HEX1[6:0])
+		);
 
 
 
@@ -97,7 +111,7 @@ module control(
 	output reg [2:0] draw_op
 	);
 	
-	reg [3:0] current_state, next_state;
+	reg [4:0] current_state, next_state;
 
 	localparam START = 5'd0,
 			   START_WAIT = 5'd1,
@@ -105,7 +119,7 @@ module control(
 			   DRAW_P1 = 5'd3,
 			   DRAW_P2 = 5'd4,
 			   DRAW_P3 = 5'd5,
-			   DRAW_C1 = 5'd6
+			   DRAW_C1 = 5'd6,
 			   DELAY = 5'd7,
 			   ERASE_PLANE = 5'd8,
 			   ERASE_P1 = 5'd9,
@@ -129,7 +143,7 @@ module control(
 			DRAW_P1: next_state = done_p1? DRAW_P2	: DRAW_P1;
 			DRAW_P2: next_state = done_p2? DRAW_P3 : DRAW_P2;
 			DRAW_P3: next_state = done_p3? DRAW_C1: DRAW_P3;
-			DRAW_C1: next_state = done_c1? DELAY: DRAW_C1
+			DRAW_C1: next_state = done_c1? DELAY: DRAW_C1;
 			DELAY: next_state = hold? ERASE_PLANE: DELAY;
 			ERASE_PLANE: next_state = done_plane? ERASE_P1: ERASE_PLANE;
 			ERASE_P1: next_state = done_p1? ERASE_P2: ERASE_P1;
@@ -140,7 +154,7 @@ module control(
 			UPDATE_XY_PLANE: next_state = UPDATE_XY_P1;
 			UPDATE_XY_P1: next_state = UPDATE_XY_P2;
 			UPDATE_XY_P2: next_state = UPDATE_XY_P3;
-			UPDATE_XY_P3: next_state = UPDATE_XY_C1;
+		   UPDATE_XY_P3: next_state = UPDATE_XY_C1;
 			UPDATE_XY_C1: next_state = DRAW_PLANE;
 			
 			
@@ -155,6 +169,7 @@ module control(
 		en_XY_p1= 0;
 		en_XY_p2= 0;
 		en_XY_p3= 0;
+		en_XY_c1 = 0;
 		en_de = 0;
 		erase = 0;
 		plot = 0;
@@ -192,7 +207,7 @@ module control(
 endmodule
 
 module datapath(
-	input reset_C, reset_N, clk, enable_delay, en_XY_plane, erase, plot, up, ck_cld, en_XY_p1,en_XY_p2, en_XY_p3, en_XY_c1
+	input reset_C, reset_N, clk, enable_delay, en_XY_plane, erase, plot, up, ck_cld, en_XY_p1,en_XY_p2, en_XY_p3, en_XY_c1,
 	input [2:0] draw_op,delay,
 	
 	
@@ -200,7 +215,8 @@ module datapath(
 	output [6:0] y_out,
 	output [2:0] colour_out,
 
-	output reg  hold, done_plane, done_p1, done_p2, done_p3, done_c1, collide
+	output reg  hold, done_plane, done_p1, done_p2, done_p3, done_c1, collide,
+	output reg [7:0] score
 	);
 	
 	reg p1, p2, p3, c1;
@@ -218,7 +234,6 @@ module datapath(
 	reg [19:0] delay_count;
 	reg [3:0] frame;
 	reg [19:0] delay_limit;
-	reg [7:0] score;
 
 	wire [7:0] random;
 	wire [3:0] height;
@@ -246,11 +261,13 @@ module datapath(
 	
 
 	
-	height_generator h0(
+	lfsr l0(
 		.clk(clk),
 		.reset(reset_N),
-		.out(random)
+		.height(random)
 		);
+		
+
 	
 	// pipe1 coordinate logic
 	always @(posedge clk)
@@ -374,6 +391,8 @@ module datapath(
 				
 		end		
 	end
+	
+	
 
 	// coin 1 coordinate logic
    always @(posedge clk)
@@ -382,15 +401,16 @@ module datapath(
 
 		begin
 			c1_x <= 8'd210;
-			p3_y <= 7'd120;
+			c1_y <= 7'd120;
 			c1 <= 0;
+			score <= 0;
 		end
 		else if (en_XY_c1) begin
 				if (!c1)
 					begin
 					c1 <= 1;
 					c1_y <= random;
-					score <= 0;
+					
 				end
 				else if (c1_x == 0) begin
 					c1_x <= 8'd160;
@@ -400,15 +420,20 @@ module datapath(
 						begin
 							if ((plane_y + 3 >= c1_y) && ( plane_y <= c1_y + 3))
 								begin
-									score <= score + 10;
-									c1_y <= 7'd127;
+									score <= score + 1;
+									c1_y <= 7'd121;
 								end
+							else
+								c1_x <= c1_x - 1;
 						end
 				else if ((plane_x + 3 > c1_x) && (plane_x <= c1_x + 3))
 							begin
-								if ((plane_y + 3 == c1_y)|| (c1_y + 3 == plane_y))
-									score <= score + 10;
-									c1_y <= 7'd127;
+								if ((plane_y + 3 == c1_y)|| (c1_y + 3 == plane_y)) begin
+									score <= score + 1;
+									c1_y <= 7'd121;
+									end
+								else
+									c1_x <= c1_x - 1;
 							end
 
 				else 
@@ -416,6 +441,7 @@ module datapath(
 				
 		end		
 	end
+	
 	//collision detect logic
 	always @(posedge clk)
 	begin
@@ -512,7 +538,7 @@ module datapath(
 			else if (draw_op == 3'b011)
 				colour_reg <= 3'b010; //colour for the pipe
 			else if (draw_op == 3'b100)
-				colour_reg <= 3'b011; //colour for the coin
+				colour_reg <= 3'b110; //colour for the coin
 			
 	end
 
@@ -639,6 +665,10 @@ module datapath(
 			mux_x = p3_x + count_p3[2:0]; 
 			mux_y = p3_y + count_p3 [10:3];
 			end
+		3'b100: begin //draw coin 1
+			mux_x = c1_x + count_c1[1:0];
+			mux_y = c1_y + count_c1[3:2];
+			end
 		endcase
 	end
 	assign x_out = mux_x;
@@ -654,8 +684,8 @@ module combined(
 	output [7:0] x_out,
 	output [6:0] y_out,
 	output [2:0] colour_out,
-	output plot
-	
+	output plot,
+	output [7:0] score	
 );
 
 	wire reset_C, en_XY_plane, en_XY_p1,en_XY_p2, en_XY_p3, en_XY_c1, done_p1, done_p2, done_p3,done_c1, en_de, erase, p, ck_cld, hold, done_plane, collide;
@@ -709,68 +739,83 @@ module combined(
 		.colour_out(colour_out),
 		.ck_cld(ck_cld),
 		.draw_op(draw_op),
-		.collide(collide)			
+		.collide(collide),
+		.score(score)
 	);
 	
 	assign plot = p;
 endmodule
 
+
 // a random number generator
 module lfsr(	
 	input clk,
 	input reset,
-	output reg [3:0] out);
+	output reg [7:0] height);
+	
+	reg [0:3] out;
 	
 	wire feedback;
 	
-	assign feedback = ~(out[3]^out[2]);
+	assign feedback = (out[3]^out[2]);
 	
 	always @(posedge clk)
 	begin
 		if (!reset)
-			out <= 4'b0101;
+			out <= 4'b1111;
 		else begin
-			out <= {out[2:0], feedback};
+			out <= {feedback, out[0:2]};
 		end
 	end
-endmodule
-
-module height_generator(
-	input clk,
-	input reset,
-	output reg [6:0] height);
-	
-	wire [3:0] random;
-	
-	lfsr l0(
-		.clk(clk),
-		.reset(reset),
-		.out(random)
-		);
 	
 	always @(*)
 	begin
-		case (random)
-		0: height = 7'd25;
-		1: height = 7'd30;
-		2: height = 7'd35;
-		3: height = 7'd40;
-		4: height = 7'd45;
-		5: height = 7'd50;
-		6: height = 7'd55;
-		7: height = 7'd60;
-		8: height = 7'd65;
-		9: height = 7'd70;
-		10: height = 7'd75;
-		11: height = 7'd80;
-		12: height = 7'd85;
-		13: height = 7'd90;
-		14: height = 7'd95;
-		15: height = 7'd100;
-		default: height = 7'd25;
+		case (out)
+		0: height = 8'd25;
+		1: height = 8'd30;
+		2: height = 8'd35;
+		3: height = 8'd40;
+		4: height = 8'd45;
+		5: height = 8'd50;
+		6: height = 8'd55;
+		7: height = 8'd60;
+		8: height = 8'd65;
+		9: height = 8'd70;
+		10: height = 8'd75;
+		11: height = 8'd80;
+		12: height = 8'd85;
+		13: height = 8'd90;
+		14: height = 8'd95;
+		15: height = 8'd100;
+		default: height = 8'd25;
 		endcase
 	end
-	
 endmodule
 
+
+module hxdisplay(hex_digit, segments);
+    input [3:0] hex_digit;
+    output reg [6:0] segments;
+   
+    always @(*)
+        case (hex_digit)
+            4'h0: segments = 7'b100_0000;
+            4'h1: segments = 7'b111_1001;
+            4'h2: segments = 7'b010_0100;
+            4'h3: segments = 7'b011_0000;
+            4'h4: segments = 7'b001_1001;
+            4'h5: segments = 7'b001_0010;
+            4'h6: segments = 7'b000_0010;
+            4'h7: segments = 7'b111_1000;
+            4'h8: segments = 7'b000_0000;
+            4'h9: segments = 7'b001_1000;
+            4'hA: segments = 7'b000_1000;
+            4'hB: segments = 7'b000_0011;
+            4'hC: segments = 7'b100_0110;
+            4'hD: segments = 7'b010_0001;
+            4'hE: segments = 7'b000_0110;
+            4'hF: segments = 7'b000_1110;   
+            default: segments = 7'h7f;
+        endcase
+endmodule
 
