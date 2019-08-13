@@ -1,4 +1,4 @@
-module airplane_p3
+module airplane
 	(
 		CLOCK_50,						//	On Board 50 MHz
 		// Your inputs and outputs here
